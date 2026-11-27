@@ -1036,7 +1036,7 @@ html, body {
 }
 
 .composer {
-  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   background: rgba(9, 11, 16, 0.98);
 }
 
@@ -1135,6 +1135,23 @@ html, body {
 .private-chat-actions button { min-height:38px; }
 .private-high { margin-right:auto; font-size:11px; color:var(--txt-dim); white-space:nowrap; }
 @media (max-width:520px) { .expert-pill { min-width:205px; } .private-chat-actions .btn-solid { flex:1 1 100%; order:5; } .private-chat-actions .send-btn { flex:1; } }
+
+/* iPhone Safari PWA keyboard recovery */
+html, body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
 
 </style>
 </head>
@@ -1423,6 +1440,40 @@ html, body {
   async function sendPrivateMessage() { const info = privateTargetInfo(); const input = $('#privateInput'); const text = input.value.trim(); if (!info || !text || rt.privateBusy) return; const list = privateMessages(rt.privateTarget); list.push({ role: 'user', text, ts: Date.now() }); input.value = ''; renderPrivateChat(); rt.privateBusy = true; $('#btnPrivateSend').disabled = true; const tier = $('#privateHighToggle').checked ? 'high' : 'low'; try { const r = privateProvider(rt.privateTarget, tier); const transcriptPrivate = list.map(x => `${x.role === 'user' ? '使用者' : info.name}：${x.text}`).join('\n\n'); const system = `${info.config.persona || '你是專業 AI 助理。'}\n\n${contextBlock()}\n\n${LANGUAGE_RULE}`; const answer = await callResolved(r, system, `這是我們的 1對1 私聊。請承接前文回答，不要把內容發到公開會議室。\n\n${transcriptPrivate}\n\n請直接回覆使用者最新問題。`, null, 1600, .55); list.push({ role: 'assistant', text: answer, ts: Date.now() }); saveSession(); renderPrivateChat(); } catch (e) { list.push({ role: 'assistant', text: friendlyError(e.message) + '\n\n原始錯誤：' + e.message, ts: Date.now(), error: true }); saveSession(); renderPrivateChat(); } finally { rt.privateBusy = false; $('#btnPrivateSend').disabled = false; } }
   async function sendPrivateToMeeting() { const info = privateTargetInfo(); if (!info) return; const list = privateMessages(rt.privateTarget); if (!list.length) return toast('私聊目前沒有內容'); const b = $('#btnPrivatePublish'); b.disabled = true; b.textContent = '整理中…'; try { const r = privateProvider(rt.privateTarget, $('#privateHighToggle').checked ? 'high' : 'low'); const raw = list.map(x => `${x.role === 'user' ? '使用者' : info.name}：${x.text}`).join('\n\n'); const text = await callResolved(r, `${info.config.persona || '你是專業 AI 助理。'}\n\n${contextBlock()}\n\n${LANGUAGE_RULE}`, `請將以下 1對1 私聊內容整理成一份可供公開會議室使用的正式條列發言。保留數據、依據、結論與待確認事項，不要提及「私聊」或整理過程。\n\n${raw}`, null, 1800, .35); const isAssistant = info.kind === 'assistant'; pushMessage({ role: 'seat', kind: isAssistant ? 'assistant-brief' : 'private-brief', seatId: isAssistant ? 'assistant' : info.id, name: isAssistant ? '會議助理' : info.name, avatar: info.avatar, text, provider: r.providerLabel, model: r.model, tier: $('#privateHighToggle').checked ? 'high' : 'low' }); closePrivateChat(); toast('已整理並送入公開會議室'); } catch (e) { toast(friendlyError(e.message), 5200); } finally { b.disabled = false; b.textContent = '📤 整理結論並回會議室發言'; } }
 
+  /* ---------- iPhone PWA keyboard viewport recovery ---------- */
+  function resetViewportAfterKeyboard() {
+    const root = document.documentElement;
+    const body = document.body;
+    const app = $('#app');
+    window.scrollTo(0, 0);
+    root.scrollTop = 0;
+    body.scrollTop = 0;
+    root.style.height = '100%';
+    body.style.height = '100%';
+    if (app) {
+      app.style.height = '100dvh';
+      app.style.maxHeight = '100dvh';
+    }
+    requestAnimationFrame(() => {
+      window.scrollTo(0, 0);
+      body.scrollTop = 0;
+      if (app) { app.style.height = '100dvh'; app.style.maxHeight = '100dvh'; }
+    });
+  }
+  function bindKeyboardViewportRecovery() {
+    const fields = $$('textarea, input');
+    fields.forEach(field => field.addEventListener('blur', () => setTimeout(resetViewportAfterKeyboard, 120), { passive: true }));
+    if (window.visualViewport) {
+      let lastHeight = window.visualViewport.height;
+      window.visualViewport.addEventListener('resize', () => {
+        const currentHeight = window.visualViewport.height;
+        const keyboardClosed = currentHeight >= window.innerHeight - 80 || currentHeight > lastHeight;
+        lastHeight = currentHeight;
+        if (keyboardClosed) setTimeout(resetViewportAfterKeyboard, 80);
+      }, { passive: true });
+    }
+  }
+
   /* ---------- Binding ---------- */
   function bind() {
     $('#expertCallbar').onclick = e => { if (e.target.closest('[data-open-assistant]')) { openPrivateChat('assistant', 'assistant'); return; } const privateId = e.target.closest('[data-private-member]')?.dataset.privateMember; if (privateId) { openPrivateChat('member', privateId); return; } const attendId = e.target.closest('[data-toggle-attend]')?.dataset.toggleAttend; const tierId = e.target.closest('[data-toggle-tier]')?.dataset.toggleTier; if (attendId) { ensureSelection(); const selected = rt.selection[attendId]; const currently = selected.attend; if (currently && selectedAttendees().length <= 1) { toast('至少需要一位出席專家'); return; } selected.attend = !currently; renderExpertControls(); return; } if (tierId) { ensureSelection(); const selected = rt.selection[tierId]; if (selected.attend) { selected.tier = selected.tier === 'high' ? 'low' : 'high'; renderExpertControls(); } return; } if (e.target.closest('#btnAllHigh')) { ensureSelection(); selectedAttendees().forEach(m => { rt.selection[m.id].tier = 'high'; }); renderExpertControls(); toast('已將目前出席專家切換為 🔥'); } };
@@ -1444,7 +1495,7 @@ html, body {
     $('#btnExportBackup').onclick = exportBackup; $('#btnCopyBackup').onclick = copyBackup; $('#btnImportBackupText').onclick = () => importBackup($('#backupText').value.trim()); $('#btnImportBackupFile').onclick = () => $('#backupFileInput').click(); $('#backupFileInput').onchange = async e => { const file = e.target.files?.[0]; if (file) importBackup(await file.text()); e.target.value = ''; };
     $('#chat').onclick = e => { const s = e.target.dataset.suggest; if (s) { $('#input').value = s; $('#input').dispatchEvent(new Event('input')); $('#input').focus(); } };
     $$('.eye').forEach(b => b.onclick = () => { const i = document.getElementById(b.dataset.eye); i.type = i.type === 'password' ? 'text' : 'password'; b.textContent = i.type === 'password' ? '顯示' : '隱藏'; });
-    window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); rt.installPrompt = e; $('#btnInstall').style.display = ''; }); $('#btnInstall').onclick = async () => { if (rt.installPrompt) { rt.installPrompt.prompt(); await rt.installPrompt.userChoice; rt.installPrompt = null; } else toast('iPhone：請使用 Safari 分享 → 加入主畫面'); }; bindPageSwipe();
+    window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); rt.installPrompt = e; $('#btnInstall').style.display = ''; }); $('#btnInstall').onclick = async () => { if (rt.installPrompt) { rt.installPrompt.prompt(); await rt.installPrompt.userChoice; rt.installPrompt = null; } else toast('iPhone：請使用 Safari 分享 → 加入主畫面'); }; bindKeyboardViewportRecovery(); bindPageSwipe();
   }
   async function testGemini() { const key = $('#keyGemini').value.trim(); if (!key) return toast('請先填入 Gemini API Key'); const b = $('#btnTestKey'); b.disabled = true; b.textContent = 'Testing…'; try { await callGemini({ provider: 'gemini', model: 'gemini-3.5-flash-lite', key }, 'You are a connection test assistant.', 'Reply only: OK', null, 32, 0); toast('Gemini connection OK'); } catch (e) { toast(e.message, 5200); } finally { b.disabled = false; b.textContent = '測試 Gemini 金鑰連線'; } }
 
