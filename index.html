@@ -1203,8 +1203,28 @@ html, body {
   align-items:stretch;
 }
 .composer textarea#input {
-  min-height:calc(var(--composer-input-height) - 18px);
+  min-height:36px;
   max-height:calc(60dvh - 18px);
+}
+
+/* Compact minimum composer: keep only a narrow bottom breathing room. */
+.composer {
+  padding-bottom: 6px;
+}
+.composer .input-box {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.composer .attach-btn {
+  width: 36px;
+  height: 36px;
+  font-size: 23px;
+}
+.composer .send-btn {
+  height: 36px;
+  min-width: 36px;
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
 </style>
@@ -1326,14 +1346,14 @@ html, body {
   function modelList(provider) { return provider === 'gemini' ? GEMINI_MODELS : provider === 'openai' ? OPENAI_MODELS : ANTHROPIC_MODELS; }
   function providerLabel(provider) { return provider === 'gemini' ? 'Gemini' : provider === 'openai' ? 'OpenAI' : provider === 'anthropic' ? 'Anthropic' : '自訂通道'; }
 
-  function defaultSettings() { return { mode: 'free', keys: { gemini: '', openai: '', anthropic: '' }, channels: [], members: DEFAULT_MEMBERS.map(x => ({ ...x })), assistant: { provider: 'gemini', model: 'gemini-3.5-flash-lite', persona: '你是使用者的專屬設計研究助理，擅長查資料、分析數據、整理思路與提出可驗證的建議。', highModel: 'gemini-3.5-pro' }, composerHeight: 44, rounds: 2, length: 'normal', searchEngine: { provider: 'google', customUrl: '' }, secretary: { enabled: true, interval: 5, provider: 'gemini', model: 'gemini-3.5-flash-lite', persona: '你是一位專業的會議秘書，請客觀統整截至目前為止所有專家的核心共識、尚未解決的爭議點、已確定的技術參數與下一步討論方向，條列式清晰呈現。' } }; }
+  function defaultSettings() { return { mode: 'free', keys: { gemini: '', openai: '', anthropic: '' }, channels: [], members: DEFAULT_MEMBERS.map(x => ({ ...x })), assistant: { provider: 'gemini', model: 'gemini-3.5-flash-lite', persona: '你是使用者的專屬設計研究助理，擅長查資料、分析數據、整理思路與提出可驗證的建議。', highModel: 'gemini-3.5-pro' }, composerHeight: 36, rounds: 2, length: 'normal', searchEngine: { provider: 'google', customUrl: '' }, secretary: { enabled: true, interval: 5, provider: 'gemini', model: 'gemini-3.5-flash-lite', persona: '你是一位專業的會議秘書，請客觀統整截至目前為止所有專家的核心共識、尚未解決的爭議點、已確定的技術參數與下一步討論方向，條列式清晰呈現。' } }; }
   function loadSettings() {
     const base = defaultSettings();
     try {
       const saved = JSON.parse(localStorage.getItem(LS_SETTINGS) || '{}');
       const oldSeats = saved.seats || [];
       const members = Array.isArray(saved.members) ? saved.members : base.members.map((m, i) => ({ ...m, ...(oldSeats[i] || {}) }));
-      const result = { ...base, ...saved, assistant: { ...base.assistant, ...(saved.assistant || {}) }, composerHeight: clamp(parseInt(saved.composerHeight, 10) || 44, 44, 1200), keys: { ...base.keys, ...(saved.keys || {}) }, channels: Array.isArray(saved.channels) ? saved.channels.map(normalizeChannel) : [], members: members.map((m, i) => normalizeMember(m, base.members[i] || base.members[0])), rounds: clamp(parseInt(saved.rounds, 10) || 2, 1, 8), length: LENGTHS[saved.length] ? saved.length : 'normal', searchEngine: { ...base.searchEngine, ...(saved.searchEngine || {}) }, secretary: { ...base.secretary, ...(saved.secretary || {}), enabled: saved.secretary?.enabled !== false, interval: clamp(parseInt(saved.secretary?.interval, 10) || 5, 1, 20) } };
+      const result = { ...base, ...saved, assistant: { ...base.assistant, ...(saved.assistant || {}) }, composerHeight: clamp(parseInt(saved.composerHeight, 10) || 36, 36, 1200), keys: { ...base.keys, ...(saved.keys || {}) }, channels: Array.isArray(saved.channels) ? saved.channels.map(normalizeChannel) : [], members: members.map((m, i) => normalizeMember(m, base.members[i] || base.members[0])), rounds: clamp(parseInt(saved.rounds, 10) || 2, 1, 8), length: LENGTHS[saved.length] ? saved.length : 'normal', searchEngine: { ...base.searchEngine, ...(saved.searchEngine || {}) }, secretary: { ...base.secretary, ...(saved.secretary || {}), enabled: saved.secretary?.enabled !== false, interval: clamp(parseInt(saved.secretary?.interval, 10) || 5, 1, 20) } };
       if (!saved.assistant && !result.keys.gemini && result.channels[0]) result.assistant.provider = 'channel:' + result.channels[0].id;
       localStorage.setItem(LS_SETTINGS, JSON.stringify(result));
       return result;
@@ -1431,7 +1451,7 @@ html, body {
   function exportBackup() { const blob = new Blob([backupString()], { type: 'application/json;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `AI會議室備份-${new Date().toISOString().slice(0,10)}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); toast('完整備份已下載'); }
   function copyBackup() { copyText(backupString()).then(() => toast('備份代碼已複製')); }
   function importBackup(raw) { try { const data = JSON.parse(raw); if (!data || !data.settings || !Array.isArray(data.projects)) throw new Error('Invalid backup format'); settings = loadSettingsFrom(data.settings); projects = data.projects; history = Array.isArray(data.history) ? data.history : []; if (data.session) Object.assign(state, defaultSession(), data.session); saveSettings(); saveProjects(); saveHistory(); saveSession(); location.reload(); } catch (e) { toast(`ERROR [Backup]: ${e.message || 'Invalid JSON backup'}`, 5200); } }
-  function loadSettingsFrom(saved) { const base = defaultSettings(); return { ...base, ...saved, assistant: { ...base.assistant, ...(saved.assistant || {}) }, composerHeight: clamp(parseInt(saved.composerHeight, 10) || 44, 44, 1200), keys: { ...base.keys, ...(saved.keys || {}) }, channels: Array.isArray(saved.channels) ? saved.channels.map(normalizeChannel) : [], members: Array.isArray(saved.members) ? saved.members.map((m, i) => normalizeMember(m, base.members[i] || base.members[0])) : base.members, searchEngine: { ...base.searchEngine, ...(saved.searchEngine || {}) }, secretary: { ...base.secretary, ...(saved.secretary || {}) } }; }
+  function loadSettingsFrom(saved) { const base = defaultSettings(); return { ...base, ...saved, assistant: { ...base.assistant, ...(saved.assistant || {}) }, composerHeight: clamp(parseInt(saved.composerHeight, 10) || 36, 36, 1200), keys: { ...base.keys, ...(saved.keys || {}) }, channels: Array.isArray(saved.channels) ? saved.channels.map(normalizeChannel) : [], members: Array.isArray(saved.members) ? saved.members.map((m, i) => normalizeMember(m, base.members[i] || base.members[0])) : base.members, searchEngine: { ...base.searchEngine, ...(saved.searchEngine || {}) }, secretary: { ...base.secretary, ...(saved.secretary || {}) } }; }
   function saveMeeting() { if (!state.messages.length) return toast('目前沒有可存檔的會議'); history.unshift({ id: uid(), savedAt: Date.now(), topic: state.topic || '未命名會議', projectName: selectedProject()?.name || '未載入專案', messages: JSON.parse(JSON.stringify(state.messages)) }); history = history.slice(0, 50); saveHistory(); renderHistory(); toast('本次會議已存檔'); }
   function renderHistory() { const box = $('#historyList'); if (!box) return; box.innerHTML = history.length ? history.map(h => `<article class="history-item"><strong>${esc(h.topic)}</strong><span>${esc(h.projectName)} · ${new Date(h.savedAt).toLocaleString()}</span><div><button class="text-btn accent" data-load-history="${esc(h.id)}" type="button">載入</button><button class="text-btn danger-text" data-delete-history="${esc(h.id)}" type="button">刪除</button></div></article>`).join('') : '<p class="hint">尚未存檔任何會議。</p>'; }
   function loadMeeting(id) { const h = history.find(x => x.id === id); if (!h) return; state.messages = JSON.parse(JSON.stringify(h.messages || [])); state.topic = h.topic || ''; state.round = 0; saveSession(); renderChat(); setPage('main'); toast('已載入歷史會議'); }
@@ -1529,14 +1549,14 @@ html, body {
   }
 
   /* ---------- Resizable composer ---------- */
-  function composerHeightBounds() { return { min: 44, max: Math.max(44, Math.round(window.innerHeight * .6)) }; }
-  function applyComposerHeight(value, persist = false) { const bounds = composerHeightBounds(); const height = clamp(Math.round(Number(value) || 44), bounds.min, bounds.max); settings.composerHeight = height; const composer = $('.composer'); if (composer) composer.style.setProperty('--composer-input-height', `${height}px`); if (persist) saveSettings(); }
-  function resetComposerHeight() { applyComposerHeight(44, true); const handle = $('#composerResizeHandle'); if (handle) handle.focus({ preventScroll: true }); }
+  function composerHeightBounds() { return { min: 36, max: Math.max(36, Math.round(window.innerHeight * .6)) }; }
+  function applyComposerHeight(value, persist = false) { const bounds = composerHeightBounds(); const height = clamp(Math.round(Number(value) || 36), bounds.min, bounds.max); settings.composerHeight = height; const composer = $('.composer'); if (composer) composer.style.setProperty('--composer-input-height', `${height}px`); if (persist) saveSettings(); }
+  function resetComposerHeight() { applyComposerHeight(36, true); const handle = $('#composerResizeHandle'); if (handle) handle.focus({ preventScroll: true }); }
   function bindComposerResize() {
     const handle = $('#composerResizeHandle');
     if (!handle) return;
-    applyComposerHeight(settings.composerHeight || 44);
-    let dragging = false; let startY = 0; let startHeight = 44;
+    applyComposerHeight(settings.composerHeight || 36);
+    let dragging = false; let startY = 0; let startHeight = 36;
     const begin = (y, event) => { if (event.target.closest?.('#btnResetComposerHeight')) return; dragging = true; startY = y; startHeight = settings.composerHeight || 44; handle.classList.add('dragging'); event.preventDefault?.(); };
     const move = (y, event) => { if (!dragging) return; event.preventDefault?.(); applyComposerHeight(startHeight + startY - y); };
     const end = () => { if (!dragging) return; dragging = false; handle.classList.remove('dragging'); saveSettings(); };
