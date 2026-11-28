@@ -1153,6 +1153,60 @@ html, body {
   overflow: hidden;
 }
 
+/* Resizable bottom composer */
+.composer {
+  --composer-input-height: 44px;
+}
+.composer-resize-handle {
+  position: relative;
+  height: 24px;
+  margin: -8px -12px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: ns-resize;
+}
+.composer-resize-handle > span {
+  width: 44px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(154,164,182,.62);
+  box-shadow: 0 0 0 5px transparent;
+  transition: background .18s, transform .18s, box-shadow .18s;
+}
+.composer-resize-handle:hover > span,
+.composer-resize-handle.dragging > span,
+.composer-resize-handle:focus-within > span {
+  background: var(--accent);
+  box-shadow: 0 0 0 5px rgba(124,108,255,.12);
+  transform:scaleX(1.08);
+}
+.composer-resize-handle > button {
+  position:absolute;
+  right:8px;
+  top:2px;
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  color:var(--txt-faint);
+  font-size:15px;
+  line-height:20px;
+  opacity:.72;
+}
+.composer-resize-handle > button:active,
+.composer-resize-handle > button:focus-visible { color:var(--txt); background:rgba(255,255,255,.08); opacity:1; }
+.composer .input-box {
+  min-height:var(--composer-input-height);
+  align-items:stretch;
+}
+.composer textarea#input {
+  min-height:calc(var(--composer-input-height) - 18px);
+  max-height:calc(60dvh - 18px);
+}
+
 </style>
 </head>
 <body>
@@ -1194,7 +1248,7 @@ html, body {
         </div>
         <div class="seats" id="seatStrip" aria-hidden="true" style="display:none"></div>
         <main id="chat" class="chat" aria-live="polite"></main>
-        <button class="jump-latest" id="btnJumpLatest" type="button">⬇️ 回最新發言</button><div class="composer">
+        <button class="jump-latest" id="btnJumpLatest" type="button">⬇️ 回最新發言</button><div class="composer"><div class="composer-resize-handle" id="composerResizeHandle" role="separator" aria-label="拖曳調整輸入區高度" tabindex="0"><span></span><button type="button" id="btnResetComposerHeight" aria-label="恢復輸入區預設高度">↺</button></div>
           <div class="toolbar"><button class="tbtn primary" id="btnDoc" type="button">▤ 定案書</button><button class="tbtn secretary-btn" id="btnSecretaryNow" type="button">📋 請秘書統整</button><button class="tbtn" id="btnSaveMeeting" type="button">💾 儲存本次會議</button><button class="tbtn" id="btnInterject" type="button" disabled>▱ 我來插話</button><button class="tbtn" id="btnStop" type="button" style="display:none">■ 結束</button><button class="tbtn" id="btnClear" type="button">⌫ 清空</button></div>
           <div class="attachment-strip" id="attachmentStrip" aria-live="polite"></div><div class="input-row"><button class="attach-btn" id="btnAttach" type="button" aria-label="新增圖片或檔案">＋</button><input id="fileInput" type="file" accept="image/*,.txt,.md,.csv,.json,.html,.css,.js,.ts,.xml,.yaml,.yml,.log" multiple hidden /><div class="input-box" id="inputBox"><textarea id="input" rows="1" placeholder="描述你的設計需求…" enterkeyhint="send"></textarea></div><button class="send-btn" id="btnSend" type="button">開始討論</button></div>
         </div>
@@ -1272,14 +1326,14 @@ html, body {
   function modelList(provider) { return provider === 'gemini' ? GEMINI_MODELS : provider === 'openai' ? OPENAI_MODELS : ANTHROPIC_MODELS; }
   function providerLabel(provider) { return provider === 'gemini' ? 'Gemini' : provider === 'openai' ? 'OpenAI' : provider === 'anthropic' ? 'Anthropic' : '自訂通道'; }
 
-  function defaultSettings() { return { mode: 'free', keys: { gemini: '', openai: '', anthropic: '' }, channels: [], members: DEFAULT_MEMBERS.map(x => ({ ...x })), assistant: { provider: 'gemini', model: 'gemini-3.5-flash-lite', persona: '你是使用者的專屬設計研究助理，擅長查資料、分析數據、整理思路與提出可驗證的建議。', highModel: 'gemini-3.5-pro' }, rounds: 2, length: 'normal', searchEngine: { provider: 'google', customUrl: '' }, secretary: { enabled: true, interval: 5, provider: 'gemini', model: 'gemini-3.5-flash-lite', persona: '你是一位專業的會議秘書，請客觀統整截至目前為止所有專家的核心共識、尚未解決的爭議點、已確定的技術參數與下一步討論方向，條列式清晰呈現。' } }; }
+  function defaultSettings() { return { mode: 'free', keys: { gemini: '', openai: '', anthropic: '' }, channels: [], members: DEFAULT_MEMBERS.map(x => ({ ...x })), assistant: { provider: 'gemini', model: 'gemini-3.5-flash-lite', persona: '你是使用者的專屬設計研究助理，擅長查資料、分析數據、整理思路與提出可驗證的建議。', highModel: 'gemini-3.5-pro' }, composerHeight: 44, rounds: 2, length: 'normal', searchEngine: { provider: 'google', customUrl: '' }, secretary: { enabled: true, interval: 5, provider: 'gemini', model: 'gemini-3.5-flash-lite', persona: '你是一位專業的會議秘書，請客觀統整截至目前為止所有專家的核心共識、尚未解決的爭議點、已確定的技術參數與下一步討論方向，條列式清晰呈現。' } }; }
   function loadSettings() {
     const base = defaultSettings();
     try {
       const saved = JSON.parse(localStorage.getItem(LS_SETTINGS) || '{}');
       const oldSeats = saved.seats || [];
       const members = Array.isArray(saved.members) ? saved.members : base.members.map((m, i) => ({ ...m, ...(oldSeats[i] || {}) }));
-      const result = { ...base, ...saved, assistant: { ...base.assistant, ...(saved.assistant || {}) }, keys: { ...base.keys, ...(saved.keys || {}) }, channels: Array.isArray(saved.channels) ? saved.channels.map(normalizeChannel) : [], members: members.map((m, i) => normalizeMember(m, base.members[i] || base.members[0])), rounds: clamp(parseInt(saved.rounds, 10) || 2, 1, 8), length: LENGTHS[saved.length] ? saved.length : 'normal', searchEngine: { ...base.searchEngine, ...(saved.searchEngine || {}) }, secretary: { ...base.secretary, ...(saved.secretary || {}), enabled: saved.secretary?.enabled !== false, interval: clamp(parseInt(saved.secretary?.interval, 10) || 5, 1, 20) } };
+      const result = { ...base, ...saved, assistant: { ...base.assistant, ...(saved.assistant || {}) }, composerHeight: clamp(parseInt(saved.composerHeight, 10) || 44, 44, 1200), keys: { ...base.keys, ...(saved.keys || {}) }, channels: Array.isArray(saved.channels) ? saved.channels.map(normalizeChannel) : [], members: members.map((m, i) => normalizeMember(m, base.members[i] || base.members[0])), rounds: clamp(parseInt(saved.rounds, 10) || 2, 1, 8), length: LENGTHS[saved.length] ? saved.length : 'normal', searchEngine: { ...base.searchEngine, ...(saved.searchEngine || {}) }, secretary: { ...base.secretary, ...(saved.secretary || {}), enabled: saved.secretary?.enabled !== false, interval: clamp(parseInt(saved.secretary?.interval, 10) || 5, 1, 20) } };
       if (!saved.assistant && !result.keys.gemini && result.channels[0]) result.assistant.provider = 'channel:' + result.channels[0].id;
       localStorage.setItem(LS_SETTINGS, JSON.stringify(result));
       return result;
@@ -1377,7 +1431,7 @@ html, body {
   function exportBackup() { const blob = new Blob([backupString()], { type: 'application/json;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `AI會議室備份-${new Date().toISOString().slice(0,10)}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); toast('完整備份已下載'); }
   function copyBackup() { copyText(backupString()).then(() => toast('備份代碼已複製')); }
   function importBackup(raw) { try { const data = JSON.parse(raw); if (!data || !data.settings || !Array.isArray(data.projects)) throw new Error('Invalid backup format'); settings = loadSettingsFrom(data.settings); projects = data.projects; history = Array.isArray(data.history) ? data.history : []; if (data.session) Object.assign(state, defaultSession(), data.session); saveSettings(); saveProjects(); saveHistory(); saveSession(); location.reload(); } catch (e) { toast(`ERROR [Backup]: ${e.message || 'Invalid JSON backup'}`, 5200); } }
-  function loadSettingsFrom(saved) { const base = defaultSettings(); return { ...base, ...saved, assistant: { ...base.assistant, ...(saved.assistant || {}) }, keys: { ...base.keys, ...(saved.keys || {}) }, channels: Array.isArray(saved.channels) ? saved.channels.map(normalizeChannel) : [], members: Array.isArray(saved.members) ? saved.members.map((m, i) => normalizeMember(m, base.members[i] || base.members[0])) : base.members, searchEngine: { ...base.searchEngine, ...(saved.searchEngine || {}) }, secretary: { ...base.secretary, ...(saved.secretary || {}) } }; }
+  function loadSettingsFrom(saved) { const base = defaultSettings(); return { ...base, ...saved, assistant: { ...base.assistant, ...(saved.assistant || {}) }, composerHeight: clamp(parseInt(saved.composerHeight, 10) || 44, 44, 1200), keys: { ...base.keys, ...(saved.keys || {}) }, channels: Array.isArray(saved.channels) ? saved.channels.map(normalizeChannel) : [], members: Array.isArray(saved.members) ? saved.members.map((m, i) => normalizeMember(m, base.members[i] || base.members[0])) : base.members, searchEngine: { ...base.searchEngine, ...(saved.searchEngine || {}) }, secretary: { ...base.secretary, ...(saved.secretary || {}) } }; }
   function saveMeeting() { if (!state.messages.length) return toast('目前沒有可存檔的會議'); history.unshift({ id: uid(), savedAt: Date.now(), topic: state.topic || '未命名會議', projectName: selectedProject()?.name || '未載入專案', messages: JSON.parse(JSON.stringify(state.messages)) }); history = history.slice(0, 50); saveHistory(); renderHistory(); toast('本次會議已存檔'); }
   function renderHistory() { const box = $('#historyList'); if (!box) return; box.innerHTML = history.length ? history.map(h => `<article class="history-item"><strong>${esc(h.topic)}</strong><span>${esc(h.projectName)} · ${new Date(h.savedAt).toLocaleString()}</span><div><button class="text-btn accent" data-load-history="${esc(h.id)}" type="button">載入</button><button class="text-btn danger-text" data-delete-history="${esc(h.id)}" type="button">刪除</button></div></article>`).join('') : '<p class="hint">尚未存檔任何會議。</p>'; }
   function loadMeeting(id) { const h = history.find(x => x.id === id); if (!h) return; state.messages = JSON.parse(JSON.stringify(h.messages || [])); state.topic = h.topic || ''; state.round = 0; saveSession(); renderChat(); setPage('main'); toast('已載入歷史會議'); }
@@ -1474,6 +1528,29 @@ html, body {
     }
   }
 
+  /* ---------- Resizable composer ---------- */
+  function composerHeightBounds() { return { min: 44, max: Math.max(44, Math.round(window.innerHeight * .6)) }; }
+  function applyComposerHeight(value, persist = false) { const bounds = composerHeightBounds(); const height = clamp(Math.round(Number(value) || 44), bounds.min, bounds.max); settings.composerHeight = height; const composer = $('.composer'); if (composer) composer.style.setProperty('--composer-input-height', `${height}px`); if (persist) saveSettings(); }
+  function resetComposerHeight() { applyComposerHeight(44, true); const handle = $('#composerResizeHandle'); if (handle) handle.focus({ preventScroll: true }); }
+  function bindComposerResize() {
+    const handle = $('#composerResizeHandle');
+    if (!handle) return;
+    applyComposerHeight(settings.composerHeight || 44);
+    let dragging = false; let startY = 0; let startHeight = 44;
+    const begin = (y, event) => { if (event.target.closest?.('#btnResetComposerHeight')) return; dragging = true; startY = y; startHeight = settings.composerHeight || 44; handle.classList.add('dragging'); event.preventDefault?.(); };
+    const move = (y, event) => { if (!dragging) return; event.preventDefault?.(); applyComposerHeight(startHeight + startY - y); };
+    const end = () => { if (!dragging) return; dragging = false; handle.classList.remove('dragging'); saveSettings(); };
+    handle.addEventListener('touchstart', e => { if (e.touches.length === 1) begin(e.touches[0].clientY, e); }, { passive: false });
+    handle.addEventListener('touchmove', e => { if (e.touches.length === 1) move(e.touches[0].clientY, e); }, { passive: false });
+    handle.addEventListener('touchend', end, { passive: true });
+    handle.addEventListener('mousedown', e => begin(e.clientY, e));
+    window.addEventListener('mousemove', e => move(e.clientY, e));
+    window.addEventListener('mouseup', end);
+    handle.addEventListener('dblclick', resetComposerHeight);
+    $('#btnResetComposerHeight').onclick = e => { e.stopPropagation(); resetComposerHeight(); };
+    handle.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); resetComposerHeight(); } });
+  }
+
   /* ---------- Binding ---------- */
   function bind() {
     $('#expertCallbar').onclick = e => { if (e.target.closest('[data-open-assistant]')) { openPrivateChat('assistant', 'assistant'); return; } const privateId = e.target.closest('[data-private-member]')?.dataset.privateMember; if (privateId) { openPrivateChat('member', privateId); return; } const attendId = e.target.closest('[data-toggle-attend]')?.dataset.toggleAttend; const tierId = e.target.closest('[data-toggle-tier]')?.dataset.toggleTier; if (attendId) { ensureSelection(); const selected = rt.selection[attendId]; const currently = selected.attend; if (currently && selectedAttendees().length <= 1) { toast('至少需要一位出席專家'); return; } selected.attend = !currently; renderExpertControls(); return; } if (tierId) { ensureSelection(); const selected = rt.selection[tierId]; if (selected.attend) { selected.tier = selected.tier === 'high' ? 'low' : 'high'; renderExpertControls(); } return; } if (e.target.closest('#btnAllHigh')) { ensureSelection(); selectedAttendees().forEach(m => { rt.selection[m.id].tier = 'high'; }); renderExpertControls(); toast('已將目前出席專家切換為 🔥'); } };
@@ -1495,7 +1572,7 @@ html, body {
     $('#btnExportBackup').onclick = exportBackup; $('#btnCopyBackup').onclick = copyBackup; $('#btnImportBackupText').onclick = () => importBackup($('#backupText').value.trim()); $('#btnImportBackupFile').onclick = () => $('#backupFileInput').click(); $('#backupFileInput').onchange = async e => { const file = e.target.files?.[0]; if (file) importBackup(await file.text()); e.target.value = ''; };
     $('#chat').onclick = e => { const s = e.target.dataset.suggest; if (s) { $('#input').value = s; $('#input').dispatchEvent(new Event('input')); $('#input').focus(); } };
     $$('.eye').forEach(b => b.onclick = () => { const i = document.getElementById(b.dataset.eye); i.type = i.type === 'password' ? 'text' : 'password'; b.textContent = i.type === 'password' ? '顯示' : '隱藏'; });
-    window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); rt.installPrompt = e; $('#btnInstall').style.display = ''; }); $('#btnInstall').onclick = async () => { if (rt.installPrompt) { rt.installPrompt.prompt(); await rt.installPrompt.userChoice; rt.installPrompt = null; } else toast('iPhone：請使用 Safari 分享 → 加入主畫面'); }; bindKeyboardViewportRecovery(); bindPageSwipe();
+    window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); rt.installPrompt = e; $('#btnInstall').style.display = ''; }); $('#btnInstall').onclick = async () => { if (rt.installPrompt) { rt.installPrompt.prompt(); await rt.installPrompt.userChoice; rt.installPrompt = null; } else toast('iPhone：請使用 Safari 分享 → 加入主畫面'); }; bindKeyboardViewportRecovery(); bindComposerResize(); bindPageSwipe();
   }
   async function testGemini() { const key = $('#keyGemini').value.trim(); if (!key) return toast('請先填入 Gemini API Key'); const b = $('#btnTestKey'); b.disabled = true; b.textContent = 'Testing…'; try { await callGemini({ provider: 'gemini', model: 'gemini-3.5-flash-lite', key }, 'You are a connection test assistant.', 'Reply only: OK', null, 32, 0); toast('Gemini connection OK'); } catch (e) { toast(e.message, 5200); } finally { b.disabled = false; b.textContent = '測試 Gemini 金鑰連線'; } }
 
