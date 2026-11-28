@@ -1252,7 +1252,7 @@ html, body {
           <section class="card" data-settings-panel="roles"><h3>📋 會議秘書設定</h3><label class="switch-row"><span>啟用自動會議秘書</span><input id="secretaryEnabled" type="checkbox" /></label><label class="field"><span>每隔幾輪統整一次</span><input id="secretaryInterval" type="number" min="1" max="20" step="1" inputmode="numeric" /></label><label class="field"><span>秘書 API 通道</span><select id="secretaryProvider"></select></label><label class="field"><span>秘書模型</span><input id="secretaryModel" type="text" list="secretaryModelList" placeholder="gemini-3.5-flash-lite" /><datalist id="secretaryModelList"></datalist></label><label class="field"><span>秘書人設提示詞</span><textarea id="secretaryPersona" rows="5"></textarea></label></section>
           <section class="card" data-settings-panel="roles"><h3>會議規則</h3><label class="field"><span>討論輪數（每位出席成員發言次數）</span><input id="roundsInput" type="number" min="1" max="8" step="1" inputmode="numeric" /></label><label class="field"><span>發言長度上限</span><select id="lengthSelect"><option value="short">精簡（約 80–120 字）</option><option value="normal">標準（約 150–220 字）</option><option value="long">深入（約 250–350 字）</option></select></label></section>
           <section class="card" data-settings-panel="keys"><h3>資料備份與還原</h3><div class="backup-actions"><button class="ghost-btn" id="btnExportBackup" type="button">⬇️ 匯出全部設定與專案</button><button class="ghost-btn" id="btnCopyBackup" type="button">複製備份代碼</button></div><label class="field"><span>貼上備份代碼（JSON）</span><textarea id="backupText" rows="4" placeholder="將備份 JSON 貼在這裡，再按匯入還原"></textarea></label><div class="backup-actions"><button class="ghost-btn" id="btnImportBackupText" type="button">⬆️ 匯入貼上的備份</button><button class="ghost-btn" id="btnImportBackupFile" type="button">選擇 JSON 檔</button><input id="backupFileInput" type="file" accept="application/json,.json" hidden /></div><p class="hint">備份檔包含 API 金鑰、成員、通道、專案、對話與歷史會議，請妥善保管。</p></section>
-          <section class="card" data-settings-panel="keys"><h3>資料與版本</h3><button class="ghost-btn" id="btnInstall" type="button" style="display:none;margin-bottom:10px">加入主畫面（安裝成 App）</button><button class="ghost-btn danger" id="btnWipe" type="button">清除所有設定與會議紀錄</button><p class="hint">所有設定、API Key、成員、通道、專案與對話都保存在目前瀏覽器的 LocalStorage。</p><small class="app-version">v3.1</small></section>
+          <section class="card" data-settings-panel="keys"><h3>資料與版本</h3><button class="ghost-btn" id="btnInstall" type="button" style="display:none;margin-bottom:10px">加入主畫面（安裝成 App）</button><button class="ghost-btn danger" id="btnWipe" type="button">清除所有設定與會議紀錄</button><p class="hint">所有設定、API Key、成員、通道、專案與對話都保存在目前瀏覽器的 LocalStorage。</p><small class="app-version">v3.1.1</small></section>
         </div>
       </section>
 
@@ -1514,7 +1514,17 @@ html, body {
   async function sendPrivateMessage() { const info = privateTargetInfo(); const input = $('#privateInput'); const text = input.value.trim(); if (!info || !text || rt.privateBusy) return; const list = privateMessages(rt.privateTarget); list.push({ role: 'user', text, ts: Date.now() }); input.value = ''; renderPrivateChat(); rt.privateBusy = true; $('#btnPrivateSend').disabled = true; const tier = $('#privateHighToggle').checked ? 'high' : 'low'; try { const r = privateProvider(rt.privateTarget, tier); const transcriptPrivate = list.map(x => `${x.role === 'user' ? '使用者' : info.name}：${x.text}`).join('\n\n'); const system = `${info.config.persona || '你是專業 AI 助理。'}\n\n${contextBlock()}\n\n${LANGUAGE_RULE}`; const answer = await callResolved(r, system, `這是我們的 1對1 私聊。請承接前文回答，不要把內容發到公開會議室。\n\n${transcriptPrivate}\n\n請直接回覆使用者最新問題。`, null, 1600, .55); list.push({ role: 'assistant', text: answer, ts: Date.now() }); saveSession(); renderPrivateChat(); } catch (e) { list.push({ role: 'assistant', text: friendlyError(e.message) + '\n\n原始錯誤：' + e.message, ts: Date.now(), error: true }); saveSession(); renderPrivateChat(); } finally { rt.privateBusy = false; $('#btnPrivateSend').disabled = false; } }
   async function sendPrivateToMeeting() { const info = privateTargetInfo(); if (!info) return; const list = privateMessages(rt.privateTarget); if (!list.length) return toast('私聊目前沒有內容'); const b = $('#btnPrivatePublish'); b.disabled = true; b.textContent = '整理中…'; try { const r = privateProvider(rt.privateTarget, $('#privateHighToggle').checked ? 'high' : 'low'); const raw = list.map(x => `${x.role === 'user' ? '使用者' : info.name}：${x.text}`).join('\n\n'); const text = await callResolved(r, `${info.config.persona || '你是專業 AI 助理。'}\n\n${contextBlock()}\n\n${LANGUAGE_RULE}`, `請將以下 1對1 私聊內容整理成一份可供公開會議室使用的正式條列發言。保留數據、依據、結論與待確認事項，不要提及「私聊」或整理過程。\n\n${raw}`, null, 1800, .35); const isAssistant = info.kind === 'assistant'; pushMessage({ role: 'seat', kind: isAssistant ? 'assistant-brief' : 'private-brief', seatId: isAssistant ? 'assistant' : info.id, name: isAssistant ? '會議助理' : info.name, avatar: info.avatar, text, provider: r.providerLabel, model: r.model, tier: $('#privateHighToggle').checked ? 'high' : 'low' }); closePrivateChat(); toast('已整理並送入公開會議室'); } catch (e) { toast(friendlyError(e.message), 5200); } finally { b.disabled = false; b.textContent = '📤 整理結論並回會議室發言'; } }
 
-  /* ---------- iPhone PWA keyboard viewport recovery ---------- */
+  /* ---------- iPhone PWA dynamic viewport and keyboard recovery ---------- */
+  function syncAppViewportHeight() {
+    const app = $('#app');
+    if (!app) return;
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const keyboardOpen = window.visualViewport && viewportHeight < window.innerHeight - 80;
+    const height = Math.max(1, Math.round(keyboardOpen ? viewportHeight : window.innerHeight));
+    document.documentElement.style.setProperty('--app-viewport-height', `${height}px`);
+    app.style.height = `${height}px`;
+    app.style.maxHeight = `${height}px`;
+  }
   function resetViewportAfterKeyboard() {
     const root = document.documentElement;
     const body = document.body;
@@ -1524,23 +1534,26 @@ html, body {
     body.scrollTop = 0;
     root.style.height = '100%';
     body.style.height = '100%';
-    if (app) {
-      app.style.height = '100dvh';
-      app.style.maxHeight = '100dvh';
-    }
+    if (app) { app.style.height = '100dvh'; app.style.maxHeight = '100dvh'; }
+    syncAppViewportHeight();
     requestAnimationFrame(() => {
       window.scrollTo(0, 0);
       body.scrollTop = 0;
       if (app) { app.style.height = '100dvh'; app.style.maxHeight = '100dvh'; }
+      syncAppViewportHeight();
     });
   }
   function bindKeyboardViewportRecovery() {
+    syncAppViewportHeight();
+    window.addEventListener('resize', syncAppViewportHeight, { passive: true });
+    window.addEventListener('orientationchange', () => setTimeout(syncAppViewportHeight, 120), { passive: true });
     const fields = $$('textarea, input');
     fields.forEach(field => field.addEventListener('blur', () => setTimeout(resetViewportAfterKeyboard, 120), { passive: true }));
     if (window.visualViewport) {
       let lastHeight = window.visualViewport.height;
       window.visualViewport.addEventListener('resize', () => {
         const currentHeight = window.visualViewport.height;
+        syncAppViewportHeight();
         const keyboardClosed = currentHeight >= window.innerHeight - 80 || currentHeight > lastHeight;
         lastHeight = currentHeight;
         if (keyboardClosed) setTimeout(resetViewportAfterKeyboard, 80);
